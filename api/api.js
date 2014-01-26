@@ -9,7 +9,7 @@ module.exports = function(app, model, email_sender) {
       return res.status(500).end();
     }
 
-    model.create_account(password, function(err, public_address) {
+    model.create_account(password, '192.168.0.1', function(err, public_address) {
       if (err) {
         console.log('Error', err);
         res.json({result: false});
