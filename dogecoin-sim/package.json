@@ -1,0 +1,14 @@
+{
+  "name": "dogecoin-sim",
+  "version": "0.0.1",
+  "description": "JSON-RPC Simulator for selected dogecoind methods",
+  "main": "simulator.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "BSD-2-Clause",
+  "dependencies": {
+    "jayson": "~1.0.11"
+  }
+}
