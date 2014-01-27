@@ -19,13 +19,15 @@ var hash_password = function(password, callback) {
 }
 
 /* Requires pg client instance. */
-var Model = function(client) {
+var Model = function(client, dogecoin) {
   this.client = client;
+  this.dogecoin = dogecoin;
 };
 
 Model.prototype.create_account = function(password, ip_address, callback) {
 
-  var client = this.client;
+  var client = this.client
+    , dogecoin = this.dogecoin;
 
   if (password.length < MINIMUM_PASSWORD_LENGTH) {
     return callback(new Error('password too short'));
@@ -47,10 +49,15 @@ Model.prototype.create_account = function(password, ip_address, callback) {
         });
       },
       function(account_id, next) {
-        // TODO: call dogecoind new ccount with 'dt' + account_id;
         var account = wallet_account_from_account_id(account_id);
-        //dogecoin.createaccount(account);
-        next(null, '1234');
+        dogecoin.getNewAddress(account, function(err, public_address) {
+          next(err, public_address, account_id);
+        });
+      },
+      function(public_address, account_id, next) {
+        client.query('UPDATE account SET public_address=$1 WHERE account_id=$2', [public_address, account_id], function(err) {
+          next(err, public_address);
+        });
       }
   ], function(err, public_address) {
     callback(err, public_address);
