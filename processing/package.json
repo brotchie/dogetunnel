@@ -1,0 +1,21 @@
+{
+  "name": "dogetunnel-processing",
+  "version": "0.0.1",
+  "description": "Payment Processor for Dogetunnel",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "BSD-2-Clause",
+  "dependencies": {
+    "async": "~0.2.10",
+    "pg": "~2.11.1",
+    "optimist": "~0.6.0",
+    "lodash": "~2.4.1"
+  },
+  "devDependencies": {
+    "mocha": "~1.17.1",
+    "sinon": "~1.7.3"
+  }
+}

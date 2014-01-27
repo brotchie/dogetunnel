@@ -164,10 +164,10 @@ END;
 $$ LANGUAGE plpgsql;
 
 
-INSERT INTO account (password_hash, public_address) VALUES ('hash', 'D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n');
+/*INSERT INTO account (password_hash, public_address) VALUES ('hash', 'D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n');
 INSERT INTO transaction (account_id, txid, amount, confirmations) VALUES (1, 'tx1', 100, 1);
 
-/*SELECT transaction_confirm(1, 1);
+SELECT transaction_confirm(1, 1);
 SELECT transaction_confirm(1, 2);
 
 SELECT * FROM transaction;
