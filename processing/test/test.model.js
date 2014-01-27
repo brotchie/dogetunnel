@@ -67,5 +67,58 @@ describe('Model', function() {
       ]));
     });
   });
+
+  describe('#getTransactions', function() {
+    it('should do nothing if no transactions are given', function() {
+      // given
+      var sut = new Model(null, null)
+        , spy = sinon.spy();
+      // when
+      sut.getTransactions([], spy);
+      // then
+      assert(spy.calledWith(null, []));
+    });
+
+    it('should dispatch a query to the database if one or more transactions are given', function() {
+      // given
+      var client = {
+        query: mock = sinon.mock().yields(null, { row: [] })
+          }
+        , sut = new Model(client, null)
+        , spy = sinon.spy();
+      // when
+      sut.getTransactions(['tx1'], spy);
+      // then
+      mock.verify();
+
+    });
+
+    it('should correct construct a database query to fetch all txids', function() {
+      // given
+      var client = {
+            query: mock = sinon.mock().withArgs('SELECT public_address, txid, confirmations, amount, state FROM account, transaction WHERE account.account_id=transaction.account_id AND txid IN ($1, $2);', ['tx1', 'tx2']).yields(null, { row: [] })
+          }
+        , sut = new Model(client, null)
+        , spy = sinon.spy();
+      // when
+      sut.getTransactions(['tx1', 'tx2'], spy);
+      // then
+      mock.verify();
+    });
+
+    it('should returns the rows of the database query', function() {
+      // given
+      var client = {
+          query: sinon.stub().yields(null, {rows: ['row1', 'row2']})
+        }
+        , sut = new Model(client, null)
+        , spy = sinon.spy();
+      // when
+      sut.getTransactions(['tx1', 'tx2'], spy);
+      // then
+      assert(spy.calledWith(null, ['row1', 'row2']));
+    });
+  });
+
 });
 

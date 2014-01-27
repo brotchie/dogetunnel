@@ -55,9 +55,10 @@ client.connect(function(err) {
   var model = new Model(client, dogecoin)
     , procesor = new Processor(model);
 
-  model.get_unspent_transactions(function(err, unspent) {
-    console.log(unspent);
+  model.getTransactions(['tx1', 'tx2'], function(err, txs) {
+    console.log(err, txs);
   });
+
 });
   
 
