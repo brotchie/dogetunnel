@@ -7,8 +7,44 @@ var Model = require('model');
 EXAMPLE_UNSPENT_TX1 = {"txid":"49af0dba3d4e7d88c917493765ebf90355f7e092fe544ce489fbef709fa2a89c","vout":0,"scriptPubKey":"76a914a70883b266b17b2a0c01b335befcd75b1be85ff288ac","amount":20.00000000,"confirmations":1};
 EXAMPLE_UNSPENT_TX2 = {"txid":"59af0dba3d4e7d88c917493765ebf90355f7e092fe544ce489fbef709fa2a89c","vout":0,"scriptPubKey":"76a914a70883b266b17b2a0c01b335befcd75b1be85ff288ac","amount":40.00000000,"confirmations":4};
 
+EXAMPLE_GET_TRANSACTION = {"amount":20.00000000,"confirmations":1,"blockhash":"7a75970081b30d98aa170a14d85ff7fd655979e6e49732b6b9d1643c594f23cd","blockindex":4,"txid":"49af0dba3d4e7d88c917493765ebf90355f7e092fe544ce489fbef709fa2a89c","time":1390205310,"details":[{"account":"DT1","address":"DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC","category":"receive","amount":20.00000000}]};
+
 describe('Model', function() {
-  describe('#getUnspentTransactions()', function() {
+  describe('#getChainTransaction()', function() {
+    it('should fetch given transaction from dogecoind', function() {
+      // given
+      var dogecoin = {
+            getTransaction: mock = sinon.mock().yields(null, {details:[]})
+          }
+        , sut = new Model(null, dogecoin)
+        , spy = sinon.spy();
+      // when
+      sut.getChainTransaction('tx1', spy);
+
+      // then
+      mock.verify();
+    });
+
+    it('should return a mapping of addresses to amounts and confirmations', function() {
+      // given
+      var dogecoin = {
+            getTransaction: sinon.stub().yields(null, EXAMPLE_GET_TRANSACTION)
+          }
+        , sut = new Model(null, dogecoin)
+        , spy = sinon.spy();
+      // when
+      sut.getChainTransaction('tx1', spy);
+
+      // then
+      assert(spy.calledWith(null, [{
+          address: 'DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC',
+          amount: 20,
+          confirmations: 1
+        }]));
+
+    });
+  });
+  describe('#getUnspentChainTransactions()', function() {
     it('should fetch unspent transaction from dogecoind', function() {
       // given
       var dogecoin = {
@@ -17,7 +53,7 @@ describe('Model', function() {
         , sut = new Model(null, dogecoin)
         , spy = sinon.spy();
       // when
-      sut.getUnspentTransactions(spy);
+      sut.getUnspentChainTransactions(spy);
 
       // then
       mock.verify();
@@ -30,7 +66,7 @@ describe('Model', function() {
         , sut = new Model(null, dogecoin)
         , spy = sinon.spy();
       // when
-      sut.getUnspentTransactions(spy);
+      sut.getUnspentChainTransactions(spy);
 
       // then
       assert(spy.calledWith(null, []));
@@ -44,7 +80,7 @@ describe('Model', function() {
         , sut = new Model(null, dogecoin)
         , spy = sinon.spy();
       // when
-      sut.getUnspentTransactions(spy);
+      sut.getUnspentChainTransactions(spy);
 
       // then
       assert(spy.calledWith(sinon.match.instanceOf(Error)));
@@ -58,7 +94,7 @@ describe('Model', function() {
         , sut = new Model(null, dogecoin)
         , spy = sinon.spy();
       // when
-      sut.getUnspentTransactions(spy);
+      sut.getUnspentChainTransactions(spy);
 
       // then
       assert(spy.calledWith(null, [

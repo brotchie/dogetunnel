@@ -15,7 +15,7 @@ var Model = function(client, dogecoin) {
    * dogecoind. Only includes relevant fields: transaction id (txid),
    * amount, and the number of confirmations.
    */
-  this.getUnspentTransactions = function(callback) {
+  this.getUnspentChainTransactions = function(callback) {
     dogecoin.listUnspent(function(err, unspent) {
       if (err) {
         callback(err);
@@ -23,6 +23,29 @@ var Model = function(client, dogecoin) {
         callback(null, _.map(unspent, function(entry) {
           return _.pick(entry, 'txid', 'amount', 'confirmations');
         }));
+      }
+    });
+  };
+
+  this.getChainTransaction = function(txid, callback) {
+    dogecoin.getTransaction(txid, function(err, res) {
+      if (err) {
+        callback(err);
+      } else {
+        callback(null, _.chain(res.details)
+          .filter(function(detail) {
+            // We only care about recieved funds.
+            return detail.category === 'receive';
+          })
+          .map(function(detail) {
+            return {
+                address: detail.address,
+                amount: detail.amount,
+                confirmations: res.confirmations
+            };
+          })
+          .value()
+        );
       }
     });
   };
