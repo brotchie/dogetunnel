@@ -1,8 +1,3 @@
-DROP TABLE IF EXISTS account CASCADE;
-DROP TABLE IF EXISTS transaction CASCADE;
-DROP TABLE IF EXISTS transaction_audit CASCADE;
-DROP TABLE IF EXISTS balance CASCADE;
-
 -- Accounts Table
 
 CREATE SEQUENCE account_id_seq;
@@ -65,14 +60,14 @@ $$ LANGUAGE sql;
 
 -- Confirm
 
-CREATE OR REPLACE FUNCTION transaction_confirm(id integer, new_confirmations integer) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION transaction_confirm(in_txid varchar(64), new_confirmations integer) RETURNS void AS $$
 DECLARE
     REQUIRED_CONFIRMATIONS integer := 2;
     txrecord RECORD;
 BEGIN
-    SELECT state INTO txrecord FROM transaction WHERE transaction_id=id;
+    SELECT transaction_id, state INTO txrecord FROM transaction WHERE txid=in_txid;
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Transaction % not found', id;
+        RAISE EXCEPTION 'Transaction % not found', in_txid;
     END IF;
 
     IF new_confirmations < required_confirmations THEN
@@ -83,21 +78,21 @@ BEGIN
         RAISE EXCEPTION 'Transaction not in unconfirmed state';
     END IF;
 
-    INSERT INTO transaction_audit (transaction_id, from_state, to_state, description) VALUES (id, txrecord.state, 'confirmed', 'Transaction confirmed');
-    UPDATE transaction SET state = 'confirmed', confirmations = new_confirmations WHERE transaction_id=id;
+    INSERT INTO transaction_audit (transaction_id, from_state, to_state, description) VALUES (txrecord.transaction_id, txrecord.state, 'confirmed', 'Transaction confirmed');
+    UPDATE transaction SET state = 'confirmed', confirmations = new_confirmations WHERE txid=in_txid;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Credit
-CREATE OR REPLACE FUNCTION transaction_credit(id integer, multiplier decimal) RETURNS numeric AS $$
+CREATE OR REPLACE FUNCTION transaction_credit(in_txid varchar(64), multiplier decimal) RETURNS numeric AS $$
 DECLARE
     txrecord RECORD;
     credited_kbytes numeric;
 BEGIN
-    SELECT state, account_id, amount INTO txrecord FROM transaction WHERE transaction_id=id;
+    SELECT transaction_id, state, account_id, amount INTO txrecord FROM transaction WHERE txid=in_txid;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Transaction % not found', id;
+        RAISE EXCEPTION 'Transaction % not found', in_txid;
     END IF;
 
     IF txrecord.state != 'confirmed' THEN
@@ -107,23 +102,23 @@ BEGIN
     credited_kbytes := multiplier * txrecord.amount;
 
     INSERT INTO transaction_audit (transaction_id, from_state, to_state, description)
-        VALUES (id, txrecord.state, 'credited', 'Credited account with ' || credited_kbytes || ' (' || txrecord.amount || ' DOGE at ' || multiplier || ' kB/DOGE)');
-    UPDATE transaction SET state = 'credited' WHERE transaction_id=id;
-    INSERT INTO balance (transaction_id, account_id, kbytes) VALUES (id, txrecord.account_id, credited_kbytes);
+        VALUES (txrecord.transaction_id, txrecord.state, 'credited', 'Credited account with ' || credited_kbytes || ' (' || txrecord.amount || ' DOGE at ' || multiplier || ' kB/DOGE)');
+    UPDATE transaction SET state = 'credited' WHERE txid=in_txid;
+    INSERT INTO balance (transaction_id, account_id, kbytes) VALUES (txrecord.transaction_id, txrecord.account_id, credited_kbytes);
 
     RETURN credited_kbytes;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Spend
-CREATE OR REPLACE FUNCTION transaction_spend(id integer, in_spent_txid varchar(64)) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION transaction_spend(in_txid varchar(64), in_spent_txid varchar(64)) RETURNS void AS $$
 DECLARE
     txrecord RECORD;
 BEGIN
-    SELECT state, amount INTO txrecord FROM transaction WHERE transaction_id=id;
+    SELECT transaction_id, state, amount INTO txrecord FROM transaction WHERE txid=in_txid;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Transaction % not found', id;
+        RAISE EXCEPTION 'Transaction % not found', in_txid;
     END IF;
 
     IF txrecord.state != 'credited' THEN
@@ -131,21 +126,21 @@ BEGIN
     END IF;
 
     INSERT INTO transaction_audit (transaction_id, from_state, to_state, description)
-        VALUES (id, txrecord.state, 'spent', 'Spent ' || txrecord.amount || ' DOGE to cold wallet in transaction ' || in_spent_txid);
-    UPDATE transaction SET state = 'spent', spent_txid=in_spent_txid, spent_confirmations=0 WHERE transaction_id=id;
+        VALUES (txrecord.transaction_id, txrecord.state, 'spent', 'Spent ' || txrecord.amount || ' DOGE to cold wallet in transaction ' || in_spent_txid);
+    UPDATE transaction SET state = 'spent', spent_txid=in_spent_txid, spent_confirmations=0 WHERE txid=in_txid;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Complete
-CREATE OR REPLACE FUNCTION transaction_complete(id integer, in_spent_confirmations integer) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION transaction_complete(in_txid varchar(64), in_spent_confirmations integer) RETURNS void AS $$
 DECLARE
     txrecord RECORD;
     REQUIRED_SPENT_CONFIRMATIONS integer := 3;
 BEGIN
-    SELECT state, amount, spent_txid INTO txrecord FROM transaction WHERE transaction_id=id;
+    SELECT transaction_id, state, amount, spent_txid INTO txrecord FROM transaction WHERE txid=in_txid;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Transaction % not found', id;
+        RAISE EXCEPTION 'Transaction % not found', in_txid;
     END IF;
 
     IF txrecord.state != 'spent' THEN
@@ -157,9 +152,9 @@ BEGIN
     END IF;
 
     INSERT INTO transaction_audit (transaction_id, from_state, to_state, description)
-        VALUES (id, txrecord.state, 'complete', 'Completed ' || txrecord.amount || ' DOGE spend to cold wallet in transaction ' || txrecord.spent_txid || ' with ' || in_spent_confirmations || ' confirmations');
-    UPDATE transaction SET state = 'complete', spent_confirmations=in_spent_confirmations WHERE transaction_id=id;
-    UPDATE balance SET state='confirmed' WHERE transaction_id=id;
+        VALUES (txrecord.transaction_id, txrecord.state, 'complete', 'Completed ' || txrecord.amount || ' DOGE spend to cold wallet in transaction ' || txrecord.spent_txid || ' with ' || in_spent_confirmations || ' confirmations');
+    UPDATE transaction SET state = 'complete', spent_confirmations=in_spent_confirmations WHERE txid=in_txid;
+    UPDATE balance SET state='confirmed' WHERE transaction_id=txrecord.transaction_id;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -167,28 +162,28 @@ $$ LANGUAGE plpgsql;
 INSERT INTO account (password_hash, public_address) VALUES ('hash', 'D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n');
 INSERT INTO transaction (account_id, txid, amount, confirmations) VALUES (1, 'tx1', 100, 1);
 INSERT INTO transaction (account_id, txid, amount, confirmations) VALUES (1, 'tx2', 100, 1);
-/*
-SELECT transaction_confirm(1, 1);
-SELECT transaction_confirm(1, 2);
+
+SELECT transaction_confirm('tx1', 1);
+SELECT transaction_confirm('tx1', 2);
 
 SELECT * FROM transaction;
 SELECT * FROM balance;
 SELECT * FROM transaction_audit;
 
-SELECT transaction_credit(1, 2.5);
+SELECT transaction_credit('tx1', 2.5);
 
 SELECT * FROM transaction;
 SELECT * FROM balance;
 SELECT * FROM transaction_audit;
 
-SELECT transaction_spend(1, 'coldtx');
+SELECT transaction_spend('tx1', 'coldtx');
 
 SELECT * FROM transaction;
 SELECT * FROM balance;
 SELECT * FROM transaction_audit;
 
-SELECT transaction_complete(1, 3);
+SELECT transaction_complete('tx1', 3);
 
 SELECT * FROM transaction;
 SELECT * FROM balance;
-SELECT * FROM transaction_audit;*/
+SELECT * FROM transaction_audit;
