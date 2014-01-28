@@ -55,7 +55,7 @@ var Model = function(client, dogecoin) {
           })
           .map(function(detail) {
             return {
-                address: detail.address,
+                public_address: detail.address,
                 amount: detail.amount,
                 confirmations: res.confirmations
             };
@@ -98,6 +98,10 @@ var Model = function(client, dogecoin) {
 
   this.completeTransaction = function(public_address, txid, confirmations, callback) {
     client.query('SELECT transaction_complete($1, $2, $3);', [public_address, txid, confirmations], log_errors('completeTransaction', public_address, txid, confirmations, callback));
+  };
+
+  this.addTransaction = function(public_address, txid, confirmations, amount, callback) {
+    client.query('INSERT INTO transaction (public_address, txid, confirmations, amount) VALUES ($1, $2, $3, $4);', [public_address, txid, confirmations, amount], log_errors('addTransaction', public_address, txid, confirmations, amount, callback));
   };
 }
 

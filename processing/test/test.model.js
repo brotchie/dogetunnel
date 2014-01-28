@@ -37,7 +37,7 @@ describe('Model', function() {
 
       // then
       assert(spy.calledWith(null, [{
-          address: 'DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC',
+          public_address: 'DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC',
           amount: 20,
           confirmations: 1
         }]));
@@ -215,6 +215,22 @@ describe('Model', function() {
         , spy = sinon.spy();
       // when
       sut.completeTransaction('pubaddress', 'tx1', 4, spy);
+      // then
+      mock.verify();
+      assert(spy.called);
+    });
+  });
+
+  describe('#addTransaction', function() {
+    it('should insert a new row into the transaction table', function() {
+      // given
+      var client = {
+            query: mock = sinon.mock().withArgs('INSERT INTO transaction (public_address, txid, confirmations, amount) VALUES ($1, $2, $3, $4);', ['pubaddress', 'tx1', 4, 20.0]).yields(null, { row: [] })
+          }
+        , sut = new Model(client, null)
+        , spy = sinon.spy();
+      // when
+      sut.addTransaction('pubaddress', 'tx1', 4, 20.0, spy);
       // then
       mock.verify();
       assert(spy.called);
