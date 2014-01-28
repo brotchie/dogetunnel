@@ -5,10 +5,6 @@ var bcrypt = require('bcrypt')
 var MINIMUM_PASSWORD_LENGTH = 6;
 var WALLET_ACCOUNT_PREFIX = 'DT';
 
-var wallet_account_from_account_id = function(account_id) {
-  return WALLET_ACCOUNT_PREFIX + account_id;
-};
-
 var hash_password = function(password, callback) {
   async.waterfall([
       bcrypt.genSalt,
@@ -35,28 +31,35 @@ Model.prototype.create_account = function(password, ip_address, callback) {
 
   async.waterfall([
       function(next) {
-        hash_password(password, next);
+        async.parallel([
+          function(next_parallel) {
+            hash_password(password, next_parallel);
+          },
+          function(next_parallel) {
+            dogecoin.getNewAddress(next_parallel);
+          }
+        ], next);
       },
-      function(password_hash, next) {
-        client.query('INSERT INTO account (password_hash, ip_address) VALUES ($1, $2) RETURNING account_id',
-                     [password_hash, ip_address], function(err, data) {
+      function(tuple, next) {
+        var password_hash = tuple[0]
+          , public_address = tuple[1];
+        client.query('INSERT INTO account (password_hash, ip_address, public_address) VALUES ($1, $2, $3)',
+                     [password_hash, ip_address, public_address],
+                     function(err) {
+                       if (err) {
+                         next(err);
+                       } else {
+                         next(null, public_address);
+                       }
+                     })
+      },
+      function(public_address, next) {
+        dogecoin.setAccount(public_address, public_address, function(err) {
           if (err) {
             next(err);
           } else {
-            var account_id = data.rows[0].account_id;
-            next(null, account_id);
+            next(null, public_address);
           }
-        });
-      },
-      function(account_id, next) {
-        var account = wallet_account_from_account_id(account_id);
-        dogecoin.getNewAddress(account, function(err, public_address) {
-          next(err, public_address, account_id);
-        });
-      },
-      function(public_address, account_id, next) {
-        client.query('UPDATE account SET public_address=$1 WHERE account_id=$2', [public_address, account_id], function(err) {
-          next(err, public_address);
         });
       }
   ], function(err, public_address) {

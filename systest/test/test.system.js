@@ -55,13 +55,10 @@ describe('System Tests', function() {
     var processor = this.processor
       , client = this.client;
 
-    var txid = '49af0dba3d4e7d88c917493765ebf90355f7e092fe544ce489fbef709fa2a89c';
+    var txid = 'ce06b6330d9437f41ccfd0dc67ac65102831b3005c8b9088c389f4186d5bca4f';
     this.simulator.setScript('scripts/processor-flow.json');
 
     async.waterfall([
-      function(next) {
-        processor.process(next);
-      },
       function(next) {
         processor.process(next);
       },
@@ -70,8 +67,13 @@ describe('System Tests', function() {
       },
       function(data, next) {
         var tx = data.rows[0];
-        assert.equal(tx.state, 'confirmed');
+        assert.equal(tx.state, 'credited');
         assert.equal(tx.confirmations, 4);
+
+        client.query('SELECT get_balance($1);', [DEFAULT_PUBLIC_ADDRESS], next);
+      },
+      function(data, next) {
+        assert.equal(data.rows[0].get_balance, 150200000);
         next();
       }
     ], done);

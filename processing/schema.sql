@@ -1,6 +1,10 @@
 -- Accounts Table
 
-CREATE DOMAIN doge_public_address AS varchar(40) NOT NULL CHECK (VALUE ~ 'D[1-9A-HJ-NP-Za-km-z]{20,40}');
+-- Dogecoin Network
+--CREATE DOMAIN doge_public_address AS varchar(40) NOT NULL CHECK (VALUE ~ 'D[1-9A-HJ-NP-Za-km-z]{20,40}');
+
+-- TestNet
+CREATE DOMAIN doge_public_address AS varchar(40) NOT NULL CHECK (VALUE ~ 'n[1-9A-HJ-NP-Za-km-z]{20,40}');
 CREATE DOMAIN doge_transaction AS varchar(64);
 
 CREATE TABLE account (
@@ -17,13 +21,14 @@ CREATE TYPE txstate AS ENUM ('unconfirmed', 'confirmed', 'credited', 'spent', 'c
 CREATE TABLE transaction (
     public_address doge_public_address REFERENCES account(public_address),
     txid doge_transaction NOT NULL,
+    vout bigint NOT NULL,
     created timestamp NOT NULL DEFAULT now(),
     confirmations integer NOT NULL,
     spent_txid doge_transaction,
     spent_confirmations integer,
     amount decimal NOT NULL,
     state txstate NOT NULL DEFAULT 'unconfirmed',
-    PRIMARY KEY (public_address, txid));
+    PRIMARY KEY (public_address, txid, vout));
 CREATE INDEX txid_idx ON transaction(txid);
 CREATE INDEX state_idx ON transaction(state);
 
@@ -32,11 +37,12 @@ CREATE INDEX state_idx ON transaction(state);
 CREATE TABLE transaction_audit (
     public_address doge_public_address,
     txid doge_transaction,
+    vout bigint,
     time timestamp NOT NULL DEFAULT now(),
     from_state txstate NOT NULL,
     to_state txstate NOT NULL,
     description text NOT NULL,
-    FOREIGN KEY(public_address, txid) REFERENCES transaction(public_address, txid));
+    FOREIGN KEY(public_address, txid, vout) REFERENCES transaction(public_address, txid, vout));
 
 -- Balance Table
 
@@ -45,6 +51,7 @@ CREATE TYPE balance_state AS ENUM ('unconfirmed', 'confirmed', 'error');
 CREATE TABLE balance (
     public_address doge_public_address REFERENCES account(public_address),
     txid doge_transaction,
+    vout bigint,
     balance_id integer NOT NULL PRIMARY KEY DEFAULT nextval('balance_id_seq'),
     time timestamp NOT NULL DEFAULT now(),
     state balance_state NOT NULL DEFAULT 'unconfirmed',
@@ -59,14 +66,14 @@ $$ LANGUAGE sql;
 
 -- Confirm
 
-CREATE OR REPLACE FUNCTION transaction_confirm(in_public_address doge_public_address, in_txid doge_transaction, in_confirmations integer) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION transaction_confirm(in_public_address doge_public_address, in_txid doge_transaction, in_vout bigint, in_confirmations integer) RETURNS void AS $$
 DECLARE
     REQUIRED_CONFIRMATIONS integer := 2;
     txrecord RECORD;
 BEGIN
-    SELECT state INTO txrecord FROM transaction WHERE txid=in_txid AND public_address=in_public_address;
+    SELECT state INTO txrecord FROM transaction WHERE txid=in_txid AND public_address=in_public_address AND vout=in_vout;
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Transaction (%, %) not found', in_public_address, in_txid;
+        RAISE EXCEPTION 'Transaction (%, %, %) not found', in_public_address, in_txid, in_vout;
     END IF;
 
     IF in_confirmations < required_confirmations THEN
@@ -77,21 +84,21 @@ BEGIN
         RAISE EXCEPTION 'Transaction not in unconfirmed state';
     END IF;
 
-    INSERT INTO transaction_audit (public_address, txid, from_state, to_state, description) VALUES (in_public_address, in_txid, txrecord.state, 'confirmed', 'Transaction confirmed');
-    UPDATE transaction SET state = 'confirmed', confirmations = in_confirmations WHERE txid=in_txid AND public_address=in_public_address;
+    INSERT INTO transaction_audit (public_address, txid, vout, from_state, to_state, description) VALUES (in_public_address, in_txid, in_vout, txrecord.state, 'confirmed', 'Transaction confirmed');
+    UPDATE transaction SET state = 'confirmed', confirmations = in_confirmations WHERE txid=in_txid AND public_address=in_public_address AND vout=in_vout;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Credit
-CREATE OR REPLACE FUNCTION transaction_credit(in_public_address doge_public_address, in_txid doge_transaction, multiplier decimal) RETURNS numeric AS $$
+CREATE OR REPLACE FUNCTION transaction_credit(in_public_address doge_public_address, in_txid doge_transaction, in_vout bigint, multiplier decimal) RETURNS numeric AS $$
 DECLARE
     txrecord RECORD;
     credited_kbytes numeric;
 BEGIN
-    SELECT state, amount INTO txrecord FROM transaction WHERE txid=in_txid AND public_address=in_public_address;
+    SELECT state, amount INTO txrecord FROM transaction WHERE txid=in_txid AND public_address=in_public_address AND vout=in_vout;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Transaction (%, %) not found', in_public_address, in_txid;
+        RAISE EXCEPTION 'Transaction (%, %, %) not found', in_public_address, in_txid, in_vout;
     END IF;
 
     IF txrecord.state != 'confirmed' THEN
@@ -100,46 +107,46 @@ BEGIN
 
     credited_kbytes := multiplier * txrecord.amount;
 
-    INSERT INTO transaction_audit (public_address, txid, from_state, to_state, description)
-        VALUES (in_public_address, in_txid, txrecord.state, 'credited', 'Credited account with ' || credited_kbytes || ' (' || txrecord.amount || ' DOGE at ' || multiplier || ' kB/DOGE)');
-    UPDATE transaction SET state = 'credited' WHERE txid=in_txid AND public_address=in_public_address;
-    INSERT INTO balance (public_address, txid, kbytes) VALUES (in_public_address, in_txid, credited_kbytes);
+    INSERT INTO transaction_audit (public_address, txid, vout, from_state, to_state, description)
+        VALUES (in_public_address, in_txid, in_vout, txrecord.state, 'credited', 'Credited account with ' || credited_kbytes || ' (' || txrecord.amount || ' DOGE at ' || multiplier || ' kB/DOGE)');
+    UPDATE transaction SET state = 'credited' WHERE txid=in_txid AND public_address=in_public_address AND vout=in_vout;
+    INSERT INTO balance (public_address, txid, vout, kbytes) VALUES (in_public_address, in_txid, in_vout, credited_kbytes);
 
     RETURN credited_kbytes;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Spend
-CREATE OR REPLACE FUNCTION transaction_spend(in_public_address doge_public_address, in_txid doge_transaction, in_spent_txid doge_transaction) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION transaction_spend(in_public_address doge_public_address, in_txid doge_transaction, in_vout bigint, in_spent_txid doge_transaction) RETURNS void AS $$
 DECLARE
     txrecord RECORD;
 BEGIN
-    SELECT state, amount INTO txrecord FROM transaction WHERE txid=in_txid AND public_address=in_public_address;
+    SELECT state, amount INTO txrecord FROM transaction WHERE txid=in_txid AND public_address=in_public_address AND vout=in_vout;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Transaction (%, %) not found', in_public_address, in_txid;
+        RAISE EXCEPTION 'Transaction (%, %, %) not found', in_public_address, in_txid, in_vout;
     END IF;
 
     IF txrecord.state != 'credited' THEN
         RAISE EXCEPTION 'Transaction not in credited state';
     END IF;
 
-    INSERT INTO transaction_audit (public_address, txid, from_state, to_state, description)
-        VALUES (in_public_address, in_txid, txrecord.state, 'spent', 'Spent ' || txrecord.amount || ' DOGE to cold wallet in transaction ' || in_spent_txid);
-    UPDATE transaction SET state = 'spent', spent_txid=in_spent_txid, spent_confirmations=0 WHERE txid=in_txid AND public_address=in_public_address;
+    INSERT INTO transaction_audit (public_address, txid, vout, from_state, to_state, description)
+        VALUES (in_public_address, in_txid, in_vout, txrecord.state, 'spent', 'Spent ' || txrecord.amount || ' DOGE to cold wallet in transaction ' || in_spent_txid);
+    UPDATE transaction SET state = 'spent', spent_txid=in_spent_txid, spent_confirmations=0 WHERE txid=in_txid AND public_address=in_public_address AND vout=in_vout;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Complete
-CREATE OR REPLACE FUNCTION transaction_complete(in_public_address doge_public_address, in_txid doge_transaction, in_spent_confirmations integer) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION transaction_complete(in_public_address doge_public_address, in_txid doge_transaction, in_vout bigint, in_spent_confirmations integer) RETURNS void AS $$
 DECLARE
     txrecord RECORD;
     REQUIRED_SPENT_CONFIRMATIONS integer := 3;
 BEGIN
-    SELECT state, amount, spent_txid INTO txrecord FROM transaction WHERE txid=in_txid AND public_address=in_public_address;
+    SELECT state, amount, spent_txid INTO txrecord FROM transaction WHERE txid=in_txid AND public_address=in_public_address AND vout=in_vout;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Transaction (%, %) not found', in_public_address, in_txid;
+        RAISE EXCEPTION 'Transaction (%, %, %) not found', in_public_address, in_txid, in_vout;
     END IF;
 
     IF txrecord.state != 'spent' THEN
@@ -150,40 +157,40 @@ BEGIN
         RAISE EXCEPTION 'Spent confirmations less than %', REQUIRED_SPENT_CONFIRMATIONS;
     END IF;
 
-    INSERT INTO transaction_audit (public_address, txid, from_state, to_state, description)
-        VALUES (in_public_address, in_txid, txrecord.state, 'complete', 'Completed ' || txrecord.amount || ' DOGE spend to cold wallet in transaction ' || txrecord.spent_txid || ' with ' || in_spent_confirmations || ' confirmations');
-    UPDATE transaction SET state = 'complete', spent_confirmations=in_spent_confirmations WHERE txid=in_txid AND public_address=in_public_address;
-    UPDATE balance SET state='confirmed' WHERE txid=in_txid AND public_address=in_public_address;
+    INSERT INTO transaction_audit (public_address, txid, vout, from_state, to_state, description)
+        VALUES (in_public_address, in_txid, in_vout, txrecord.state, 'complete', 'Completed ' || txrecord.amount || ' DOGE spend to cold wallet in transaction ' || txrecord.spent_txid || ' with ' || in_spent_confirmations || ' confirmations');
+    UPDATE transaction SET state = 'complete', spent_confirmations=in_spent_confirmations WHERE txid=in_txid AND public_address=in_public_address AND vout=in_vout;
+    UPDATE balance SET state='confirmed' WHERE txid=in_txid AND public_address=in_public_address AND vout=in_vout;
 END;
 $$ LANGUAGE plpgsql;
 
-INSERT INTO account (password_hash, public_address) VALUES ('password', 'DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC');
-/*INSERT INTO transaction (public_address, txid, amount, confirmations) VALUES ('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx1', 100, 1);
-INSERT INTO transaction (public_address, txid, amount, confirmations) VALUES ('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx2', 100, 1);
+/*INSERT INTO account (password_hash, public_address) VALUES ('password', 'DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC');
+INSERT INTO transaction (public_address, txid, vout, amount, confirmations) VALUES ('DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC', 'tx1', 0, 100, 1);
+INSERT INTO transaction (public_address, txid, vout, amount, confirmations) VALUES ('DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC', 'tx2', 0, 100, 1);
 
-SELECT transaction_confirm('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx1', 1);
-SELECT transaction_confirm('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx1', 2);
-
-SELECT * FROM transaction;
-SELECT * FROM balance;
-SELECT * FROM transaction_audit;
-
-SELECT transaction_credit('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx1', 2.5);
+SELECT transaction_confirm('DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC', 'tx1', 0, 1);
+SELECT transaction_confirm('DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC', 'tx1', 0, 2);
 
 SELECT * FROM transaction;
 SELECT * FROM balance;
 SELECT * FROM transaction_audit;
 
-SELECT transaction_spend('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx1', 'coldtx');
+SELECT transaction_credit('DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC', 'tx1', 0, 2.5);
 
 SELECT * FROM transaction;
 SELECT * FROM balance;
 SELECT * FROM transaction_audit;
 
-SELECT transaction_complete('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx1', 3);
+SELECT transaction_spend('DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC', 'tx1', 0, 'coldtx');
 
 SELECT * FROM transaction;
 SELECT * FROM balance;
 SELECT * FROM transaction_audit;
 
-SELECT get_balance('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n');*/
+SELECT transaction_complete('DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC', 'tx1', 0, 3);
+
+SELECT * FROM transaction;
+SELECT * FROM balance;
+SELECT * FROM transaction_audit;
+
+SELECT get_balance('DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC');*/

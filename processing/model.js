@@ -30,16 +30,7 @@ var Model = function(client, dogecoin) {
    * amount, and the number of confirmations.
    */
   this.getUnspentChainTransactions = function(callback) {
-    dogecoin.listUnspent(function(err, unspent) {
-      if (err) {
-        log.error('getUnspentChainTransactions', err.message);
-        callback(err);
-      } else {
-        callback(null, _.map(unspent, function(entry) {
-          return _.pick(entry, 'txid', 'amount', 'confirmations');
-        }));
-      }
-    });
+    dogecoin.listUnspent(0, callback);
   };
 
   this.getChainTransaction = function(txid, callback) {
@@ -74,7 +65,7 @@ var Model = function(client, dogecoin) {
       return '$' + i;
     }).join(', ');
 
-    client.query('SELECT public_address, txid, confirmations, amount, state FROM transaction WHERE txid IN (' + args + ');', txids, function(err, data) {
+    client.query('SELECT public_address, txid, vout, confirmations, amount, state FROM transaction WHERE txid IN (' + args + ');', txids, function(err, data) {
       if (err) {
         log.error('getTransactions', err.message);
         callback(err);
@@ -107,24 +98,24 @@ var Model = function(client, dogecoin) {
 
   };
 
-  this.confirmTransaction = function(public_address, txid, confirmations, callback) {
-    client.query('SELECT transaction_confirm($1, $2, $3);', [public_address, txid, confirmations], log_errors('confirmTransaction', public_address, txid, confirmations, callback));
+  this.confirmTransaction = function(public_address, txid, vout, confirmations, callback) {
+    client.query('SELECT transaction_confirm($1, $2, $3, $4);', [public_address, txid, vout, confirmations], log_errors('confirmTransaction', public_address, txid, confirmations, callback));
   };
 
-  this.creditTransaction = function(public_address, txid, multiplier, callback) {
-    client.query('SELECT transaction_credit($1, $2, $3);', [public_address, txid, multiplier], log_errors('creditTransaction', public_address, txid, multiplier, callback));
+  this.creditTransaction = function(public_address, txid, vout, multiplier, callback) {
+    client.query('SELECT transaction_credit($1, $2, $3, $4);', [public_address, txid, vout, multiplier], log_errors('creditTransaction', public_address, txid, multiplier, callback));
   };
 
-  this.spendTransaction = function(public_address, txid, spent_txid, callback) {
-    client.query('SELECT transaction_spend($1, $2, $3);', [public_address, txid, spent_txid], log_errors('spendTransaction', public_address, txid, spent_txid, callback));
+  this.spendTransaction = function(public_address, txid, vout, spent_txid, callback) {
+    client.query('SELECT transaction_spend($1, $2, $3, $4);', [public_address, txid, vout, spent_txid], log_errors('spendTransaction', public_address, txid, spent_txid, callback));
   };
 
-  this.completeTransaction = function(public_address, txid, confirmations, callback) {
-    client.query('SELECT transaction_complete($1, $2, $3);', [public_address, txid, confirmations], log_errors('completeTransaction', public_address, txid, confirmations, callback));
+  this.completeTransaction = function(public_address, txid, vout, confirmations, callback) {
+    client.query('SELECT transaction_complete($1, $2, $3, $4);', [public_address, txid, vout, confirmations], log_errors('completeTransaction', public_address, txid, confirmations, callback));
   };
 
-  this.addTransaction = function(public_address, txid, confirmations, amount, callback) {
-    client.query('INSERT INTO transaction (public_address, txid, confirmations, amount) VALUES ($1, $2, $3, $4);', [public_address, txid, confirmations, amount], log_errors('addTransaction', public_address, txid, confirmations, amount, callback));
+  this.addTransaction = function(public_address, txid, vout, confirmations, amount, callback) {
+    client.query('INSERT INTO transaction (public_address, txid, vout, confirmations, amount) VALUES ($1, $2, $3, $4, $5);', [public_address, txid, vout, confirmations, amount], log_errors('addTransaction', public_address, txid, confirmations, amount, callback));
   };
 }
 

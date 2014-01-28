@@ -40,10 +40,10 @@ var pg = require('pg');
 var dogecoin = require('node-dogecoin')({
   user: argv.dogeuser,
   pass: argv.dogepass,
-  port: argv.dogeport,
-  headers: {
+  port: argv.dogeport
+  /*headers: {
     'Content-Type': 'application/json'
-  }
+  }*/
 });
 
 var express = require('express')

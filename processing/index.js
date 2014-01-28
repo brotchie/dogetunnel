@@ -45,10 +45,10 @@ var client = new pg.Client(argv.dbstring);
 var dogecoin = require('node-dogecoin')({
   user: argv.dogeuser,
   pass: argv.dogepass,
-  port: argv.dogeport,
-  headers: {
+  port: argv.dogeport
+  /*headers: {
     'Content-Type': 'application/json'
-  }
+  }*/
 });
 
 client.connect(function(err) {
@@ -60,21 +60,16 @@ client.connect(function(err) {
   var model = new Model(client, dogecoin)
     , processor = new Processor(model);
 
-  async.waterfall([
-    function(next) {
-      processor.processUnspent(next);
-    },
-    function(unspent, next) {
-      processor.processUnconfirmed(unspent, next);
-    }
-  ], function(err) {
-    if (err) {
-      log.error(err.message);
-      process.exit(1);
-    } else {
-      process.exit(0);
-    }
-  });
+
+  (function main(){
+    processor.process(function(err) {
+      if (err) {
+        throw err;
+      } else {
+        setTimeout(main, 10000);
+      }
+    });
+  })();
 });
 
 process.on('exit', function(code) {
