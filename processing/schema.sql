@@ -157,8 +157,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-INSERT INTO account (password_hash, public_address) VALUES ('hash', 'D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n');
-INSERT INTO transaction (public_address, txid, amount, confirmations) VALUES ('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx1', 100, 1);
+INSERT INTO account (password_hash, public_address) VALUES ('password', 'DL4TqXtbE3iAS49qQgkV2iWWuP6h4HyMTC');
+/*INSERT INTO transaction (public_address, txid, amount, confirmations) VALUES ('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx1', 100, 1);
 INSERT INTO transaction (public_address, txid, amount, confirmations) VALUES ('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx2', 100, 1);
 
 SELECT transaction_confirm('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n', 'tx1', 1);
@@ -186,4 +186,4 @@ SELECT * FROM transaction;
 SELECT * FROM balance;
 SELECT * FROM transaction_audit;
 
-SELECT get_balance('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n');
+SELECT get_balance('D7mFXbQ2n9K8B9SM6q8nRd5nKwriycEz6n');*/

@@ -84,6 +84,29 @@ var Model = function(client, dogecoin) {
     });
   };
 
+  this.getTransactionsInState = function(state, callback) {
+    client.query('SELECT * FROM transaction WHERE state=$1;', [state], function(err, data) {
+      if (err) {
+        log.error('getTransactionsInState', state, err.message);
+        callback(err);
+      } else {
+        callback(null, data.rows);
+      }
+    });
+  };
+
+  this.getTransactionIdentifiersInState = function(state, callback) {
+    client.query('SELECT DISTINCT txid FROM transaction WHERE state=$1;', [state], function(err, data) {
+      if (err) {
+        log.error('getTransactionsInState', state, err.message);
+        callback(err);
+      } else {
+        callback(null, _.pluck(data.rows, 'txid'));
+      }
+    });
+
+  };
+
   this.confirmTransaction = function(public_address, txid, confirmations, callback) {
     client.query('SELECT transaction_confirm($1, $2, $3);', [public_address, txid, confirmations], log_errors('confirmTransaction', public_address, txid, confirmations, callback));
   };

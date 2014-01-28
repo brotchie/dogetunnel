@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 var pg = require('pg'),
+    async = require('async'),
     log4js = require('log4js'),
     log = log4js.getLogger();
 
@@ -57,7 +58,23 @@ client.connect(function(err) {
   }
 
   var model = new Model(client, dogecoin)
-    , procesor = new Processor(model);
+    , processor = new Processor(model);
+
+  async.waterfall([
+    function(next) {
+      processor.processUnspent(next);
+    },
+    function(unspent, next) {
+      processor.processUnconfirmed(unspent, next);
+    }
+  ], function(err) {
+    if (err) {
+      log.error(err.message);
+      process.exit(1);
+    } else {
+      process.exit(0);
+    }
+  });
 });
 
 process.on('exit', function(code) {

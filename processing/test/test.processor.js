@@ -21,7 +21,7 @@ describe('Processor', function() {
     it('should fail if adding the transaction fails', function() {
       // given
       var model = {
-            getChainTransaction: sinon.stub().yields(null, {}),
+            getChainTransaction: sinon.stub().yields(null, []),
             addTransaction: sinon.stub().yields(new Error('failed'))
           }
         , sut = new Processor(model)
@@ -35,11 +35,11 @@ describe('Processor', function() {
     it('should add a transaction with the details returned from the chain transaction', function(done) {
       // given
       var model = {
-            getChainTransaction: sinon.stub().yields(null, {
+            getChainTransaction: sinon.stub().yields(null, [{
               public_address: 'pubaddress',
               confirmations: 5,
               amount: 20.0
-            }),
+            }]),
             addTransaction: mock = sinon.mock().withArgs('pubaddress', 'tx1', 5, 20.0).yields(null)
           }
         , sut = new Processor(model)
@@ -81,7 +81,63 @@ describe('Processor', function() {
         mock.verify();
         done();
       }
+    });
+  });
+
+  describe('#confirmTransaction()', function() {
+    it('should confirm transactions with the model', function(done) {
+      // given
+      var model = {
+            getChainTransaction: sinon.stub().yields(null, [
+              {
+                public_address: 'pubaddress',
+                confirmations: 5,
+                amount: 20.0
+              },
+              {
+                public_address: 'pubaddress2',
+                confirmations: 5,
+                amount: 20.0
+              }
+            ]),
+            confirmTransaction: stub = sinon.stub().yields(null)
+          }
+        , sut = new Processor(model)
+        , spy = sinon.spy(then);
+
+      // when
+      sut.confirmTransaction('tx1', spy);
+
+      // then
+      function then() {
+        assert(stub.calledWith('pubaddress', 'tx1', 5));
+        assert(stub.calledWith('pubaddress2', 'tx1', 5));
+        done();
+      }
+    });
+  });
+
+  describe('#processUnconfirmed()', function() {
+    it('should process the unconfirmed transactions with confirmations greater than 2', function(done) {
+      // given
+      var model = {
+            getTransactionIdentifiersInState: sinon.stub().withArgs('unconfirmed').yields(null, ['tx1', 'tx2'])
+          }
+        , sut = new Processor(model)
+        , spy = sinon.spy(then);
+      sut.confirmTransaction = sinon.mock().withArgs('tx1').yields();
+
+      // when
+      sut.processUnconfirmed([{txid: 'tx1', confirmations: 2}, {txid: 'tx2', confirmations: 1}], spy);
+
+      // then
+      function then() {
+        mock.verify();
+        done();
+      }
 
     });
   });
+
+
 });

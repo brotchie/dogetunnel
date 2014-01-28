@@ -156,6 +156,22 @@ describe('Model', function() {
     });
   });
 
+  describe('#getTransactionsInState', function() {
+    it('should query the transaction table for all transactions in the given state', function() {
+      // given
+      var client = {
+            query: mock = sinon.mock().withArgs('SELECT * FROM transaction WHERE state=$1;', ['credited']).yields(null, { row: [] })
+          }
+        , sut = new Model(client, null)
+        , spy = sinon.spy();
+      // when
+      sut.getTransactionsInState(sut.CREDITED, spy);
+      // then
+      mock.verify();
+
+    });
+  });
+
   describe('#confirmTransaction', function() {
     it('should dispatch a query to the database to call transaction_confirm', function() {
       // given
