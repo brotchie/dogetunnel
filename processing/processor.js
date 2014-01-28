@@ -6,7 +6,16 @@ var REQUIRED_CONFIRMATIONS = 2;
 
 var Processor = function(model) {
   var self = this;
+
   this.process = function(callback) {
+    async.waterfall([
+      function(next) {
+        self.processUnspent(next);
+      },
+      function(unspent, next) {
+        self.processUnconfirmed(unspent, next);
+      }
+    ], callback);
   };
 
   this.createTransaction = function(txid, callback) {
