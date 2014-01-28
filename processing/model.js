@@ -35,13 +35,29 @@ var Model = function(client, dogecoin) {
       return '$' + i;
     }).join(', ');
 
-    client.query('SELECT public_address, txid, confirmations, amount, state FROM account, transaction WHERE account.account_id=transaction.account_id AND txid IN (' + args + ');', txids, function(err, data) {
+    client.query('SELECT public_address, txid, confirmations, amount, state FROM transaction WHERE txid IN (' + args + ');', txids, function(err, data) {
       if (err) {
         callback(err);
       } else {
         callback(null, data.rows);
       }
     });
+  };
+
+  this.confirmTransaction = function(public_address, txid, confirmations, callback) {
+    client.query('SELECT transaction_confirm($1, $2, $3);', [public_address, txid, confirmations], callback);
+  };
+
+  this.creditTransaction = function(public_address, txid, multiplier, callback) {
+    client.query('SELECT transaction_credit($1, $2, $3);', [public_address, txid, multiplier], callback);
+  };
+
+  this.spendTransaction = function(public_address, txid, spent_txid, callback) {
+    client.query('SELECT transaction_spend($1, $2, $3);', [public_address, txid, spent_txid], callback);
+  };
+
+  this.completeTransaction = function(public_address, txid, confirmations, callback) {
+    client.query('SELECT transaction_complete($1, $2, $3);', [public_address, txid, confirmations], callback);
   };
 }
 

@@ -96,7 +96,7 @@ describe('Model', function() {
     it('should correct construct a database query to fetch all txids', function() {
       // given
       var client = {
-            query: mock = sinon.mock().withArgs('SELECT public_address, txid, confirmations, amount, state FROM account, transaction WHERE account.account_id=transaction.account_id AND txid IN ($1, $2);', ['tx1', 'tx2']).yields(null, { row: [] })
+            query: mock = sinon.mock().withArgs('SELECT public_address, txid, confirmations, amount, state FROM transaction WHERE txid IN ($1, $2);', ['tx1', 'tx2']).yields(null, { row: [] })
           }
         , sut = new Model(client, null)
         , spy = sinon.spy();
@@ -117,6 +117,71 @@ describe('Model', function() {
       sut.getTransactions(['tx1', 'tx2'], spy);
       // then
       assert(spy.calledWith(null, ['row1', 'row2']));
+    });
+  });
+
+  describe('#confirmTransaction', function() {
+    it('should dispatch a query to the database to call transaction_confirm', function() {
+      // given
+      var client = {
+            query: mock = sinon.mock().withArgs('SELECT transaction_confirm($1, $2, $3);', ['pubaddress', 'tx1', 4]).yields(null, { row: [] })
+          }
+        , sut = new Model(client, null)
+        , spy = sinon.spy();
+      // when
+      sut.confirmTransaction('pubaddress', 'tx1', 4, spy);
+      // then
+      mock.verify();
+      assert(spy.called);
+    });
+  });
+
+  describe('#creditTransaction', function() {
+    it('should dispatch a query to the database to call transaction_credit', function() {
+      // given
+      var client = {
+            query: mock = sinon.mock().withArgs('SELECT transaction_credit($1, $2, $3);', ['pubaddress', 'tx1', 4.5]).yields(null, { row: [] })
+          }
+        , sut = new Model(client, null)
+        , spy = sinon.spy();
+      // when
+      sut.creditTransaction('pubaddress', 'tx1', 4.5, spy);
+      // then
+      mock.verify();
+      assert(spy.called);
+
+    });
+  });
+
+  describe('#spendTransaction', function() {
+    it('should dispatch a query to the database to call transaction_spend', function() {
+      // given
+      var client = {
+            query: mock = sinon.mock().withArgs('SELECT transaction_spend($1, $2, $3);', ['pubaddress', 'tx1', 'tx2']).yields(null, { row: [] })
+          }
+        , sut = new Model(client, null)
+        , spy = sinon.spy();
+      // when
+      sut.spendTransaction('pubaddress', 'tx1', 'tx2', spy);
+      // then
+      mock.verify();
+      assert(spy.called);
+    });
+  });
+
+  describe('#completeTransaction', function() {
+    it('should dispatch a query to the database to call transaction_complete', function() {
+      // given
+      var client = {
+            query: mock = sinon.mock().withArgs('SELECT transaction_complete($1, $2, $3);', ['pubaddress', 'tx1', 4]).yields(null, { row: [] })
+          }
+        , sut = new Model(client, null)
+        , spy = sinon.spy();
+      // when
+      sut.completeTransaction('pubaddress', 'tx1', 4, spy);
+      // then
+      mock.verify();
+      assert(spy.called);
     });
   });
 
