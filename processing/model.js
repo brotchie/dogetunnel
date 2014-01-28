@@ -1,4 +1,18 @@
-var _ = require('lodash');
+var _ = require('lodash')
+  , log = require('log4js').getLogger('model');
+
+function log_errors(fname, fcn) {
+  var args = Array.prototype.slice.call(arguments),
+      fcn = args.pop();
+  return function(err, callback) {
+    if (err) {
+      args.push('-');
+      args.push(err.message);
+      log.error.apply(log, args);
+    }
+    fcn(err, callback);
+  };
+};
 
 /* Model constructor. Needs a pg postgresql client instance. */
 var Model = function(client, dogecoin) {
@@ -18,6 +32,7 @@ var Model = function(client, dogecoin) {
   this.getUnspentChainTransactions = function(callback) {
     dogecoin.listUnspent(function(err, unspent) {
       if (err) {
+        log.error('getUnspentChainTransactions', err.message);
         callback(err);
       } else {
         callback(null, _.map(unspent, function(entry) {
@@ -30,6 +45,7 @@ var Model = function(client, dogecoin) {
   this.getChainTransaction = function(txid, callback) {
     dogecoin.getTransaction(txid, function(err, res) {
       if (err) {
+        log.error('getChainTransaction', err.message);
         callback(err);
       } else {
         callback(null, _.chain(res.details)
@@ -60,6 +76,7 @@ var Model = function(client, dogecoin) {
 
     client.query('SELECT public_address, txid, confirmations, amount, state FROM transaction WHERE txid IN (' + args + ');', txids, function(err, data) {
       if (err) {
+        log.error('getTransactions', err.message);
         callback(err);
       } else {
         callback(null, data.rows);
@@ -68,19 +85,19 @@ var Model = function(client, dogecoin) {
   };
 
   this.confirmTransaction = function(public_address, txid, confirmations, callback) {
-    client.query('SELECT transaction_confirm($1, $2, $3);', [public_address, txid, confirmations], callback);
+    client.query('SELECT transaction_confirm($1, $2, $3);', [public_address, txid, confirmations], log_errors('confirmTransaction', public_address, txid, confirmations, callback));
   };
 
   this.creditTransaction = function(public_address, txid, multiplier, callback) {
-    client.query('SELECT transaction_credit($1, $2, $3);', [public_address, txid, multiplier], callback);
+    client.query('SELECT transaction_credit($1, $2, $3);', [public_address, txid, multiplier], log_errors('creditTransaction', public_address, txid, multiplier, callback));
   };
 
   this.spendTransaction = function(public_address, txid, spent_txid, callback) {
-    client.query('SELECT transaction_spend($1, $2, $3);', [public_address, txid, spent_txid], callback);
+    client.query('SELECT transaction_spend($1, $2, $3);', [public_address, txid, spent_txid], log_errors('spendTransaction', public_address, txid, spent_txid, callback));
   };
 
   this.completeTransaction = function(public_address, txid, confirmations, callback) {
-    client.query('SELECT transaction_complete($1, $2, $3);', [public_address, txid, confirmations], callback);
+    client.query('SELECT transaction_complete($1, $2, $3);', [public_address, txid, confirmations], log_errors('completeTransaction', public_address, txid, confirmations, callback));
   };
 }
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-var pg = require('pg');
+var pg = require('pg'),
+    log4js = require('log4js'),
+    log = log4js.getLogger();
 
 var optimist = require('optimist')
     .options('h', {
@@ -32,6 +34,8 @@ if (argv.help) {
   process.exit(0);
 }
 
+log.info('Dogetunnel payment processor started.');
+
 var Model = require('model')
   , Processor = require('processor');
 
@@ -54,11 +58,17 @@ client.connect(function(err) {
 
   var model = new Model(client, dogecoin)
     , procesor = new Processor(model);
-
-  model.getTransactions(['tx1', 'tx2'], function(err, txs) {
-    console.log(err, txs);
-  });
-
 });
-  
 
+process.on('exit', function(code) {
+  if (code === 0) {
+    log.info('Dogetunnel payment processor stopped normally.');
+  } else {
+    log.error('Dogetunnel payment processor stopped with exit code ' + code + '.');
+  }
+});
+
+process.on('SIGINT', function() {
+  log.error('Dogetunnel payment processor killed by SIGINT.');
+  process.exit(1);
+});
