@@ -1,4 +1,5 @@
 var _ = require('lodash')
+  , async = require('async')
   , log = require('log4js').getLogger('model');
 
 function log_errors(fname, fcn) {
@@ -31,6 +32,20 @@ var Model = function(client, dogecoin) {
    */
   this.getUnspentChainTransactions = function(callback) {
     dogecoin.listUnspent(0, callback);
+  };
+
+  this.sendRawTransaction = function(inputs, outputs, callback) {
+    async.waterfall([
+      function(next) {
+        dogecoin.createRawTransaction(inputs, outputs, next);
+      },
+      function(hex, next) {
+        dogecoin.signRawTransaction(hex, next);
+      },
+      function(res, next) {
+        next(null, res.hex);
+      }
+    ], callback);
   };
 
   this.getChainTransaction = function(txid, callback) {

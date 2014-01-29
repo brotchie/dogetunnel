@@ -3,7 +3,9 @@ var async = require('async')
   , log = require('log4js').getLogger('processor');
 
 var REQUIRED_CONFIRMATIONS = 2
-  , KBYTES_PER_DOGE = 1000;
+  , KBYTES_PER_DOGE = 1000
+  , COLD_WALLET_PUBLIC_ADDRESS = 'norgd1AJvZt5xkFMyX8VWUVJoFM3PhGueL'
+  , TRANSACTION_FEE = 1;
 
 var Processor = function(model) {
   var self = this;
@@ -19,6 +21,9 @@ var Processor = function(model) {
       function(next) {
         self.processConfirmed(next);
       }
+/*      function(next) {
+        self.processCredited(next);
+      }*/
     ], callback);
   };
 
@@ -124,6 +129,36 @@ var Processor = function(model) {
       function(confirmed, next) {
         log.debug('processConfirmed', 'Processing', confirmed.length, 'confirmed transactions.');
         self.creditTransactions(confirmed, next);
+      }
+    ], callback);
+  };
+
+  this.processCredited = function(callback) {
+    async.waterfall([
+      function(next) {
+        model.getTransactionsInState(model.CREDITED, next);
+      },
+      function(credited, next) {
+        var total = _.reduce(credited, function(sum, tx) {
+          return sum + Number(tx.amount);
+        }, 0);
+        log.info('processCredited', total, 'unspent');
+        if (total > 500) {
+          var inputs = _.map(credited, function(tx) {
+            return {txid: tx.txid, vout: Number(tx.vout)};
+          });
+          var outputs = {};
+          outputs[COLD_WALLET_PUBLIC_ADDRESS] = total - TRANSACTION_FEE;
+
+          console.log(inputs, outputs);
+
+          model.sendRawTransaction(inputs, outputs, function(err, hex) {
+            console.log(err, hex);
+            next();
+          });
+        } else {
+          next();
+        }
       }
     ], callback);
   };
