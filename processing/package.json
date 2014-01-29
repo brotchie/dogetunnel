@@ -9,6 +9,7 @@
   "author": "",
   "license": "BSD-2-Clause",
   "dependencies": {
+    "node-dogecoin": "https://github.com/brotchie/node-dogecoin/tarball/master",
     "async": "~0.2.10",
     "pg": "~2.11.1",
     "optimist": "~0.6.0",

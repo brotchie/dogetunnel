@@ -37,13 +37,23 @@ var Model = function(client, dogecoin) {
   this.sendRawTransaction = function(inputs, outputs, callback) {
     async.waterfall([
       function(next) {
+        log.info('Creating raw transaction', inputs, outputs);
         dogecoin.createRawTransaction(inputs, outputs, next);
       },
       function(hex, next) {
+        log.info('Signing raw transaction', hex);
         dogecoin.signRawTransaction(hex, next);
       },
-      function(res, next) {
-        next(null, res.hex);
+      function(signed, next) {
+        if (signed.complete) {
+          log.info('Sending raw transaction', signed.hex);
+          dogecoin.sendRawTransaction(signed.hex, next);
+        } else {
+          next(new Error('incomplete raw transaction ' + JSON.stringify(signed)));
+        }
+      },
+      function(txid, next) {
+        next(null, txid, inputs, outputs);
       }
     ], callback);
   };

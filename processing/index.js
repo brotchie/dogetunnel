@@ -101,7 +101,7 @@ async.waterfall([
     
     client.connect(function(err) {
       if (err) {
-        console.error('Fatal database error', err);
+        log.fatal('Fatal database error', err);
         return process.exit(1);
       }
 
