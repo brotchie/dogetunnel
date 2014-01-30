@@ -52,7 +52,7 @@ Model.prototype.create_account = function(password, ip_address, callback) {
                          next(null, public_address);
                        }
                      })
-      },
+      }/*,
       function(public_address, next) {
         dogecoin.setAccount(public_address, public_address, function(err) {
           if (err) {
@@ -61,7 +61,7 @@ Model.prototype.create_account = function(password, ip_address, callback) {
             next(null, public_address);
           }
         });
-      }
+      }*/
   ], function(err, public_address) {
     callback(err, public_address);
   });
