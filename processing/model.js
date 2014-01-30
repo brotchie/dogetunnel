@@ -41,15 +41,17 @@ var Model = function(client, dogecoin) {
         dogecoin.createRawTransaction(inputs, outputs, next);
       },
       function(hex, next) {
-        log.info('Signing raw transaction', hex);
+        //log.info('Signing raw transaction', hex);
+        log.info('Signing raw transaction');
         dogecoin.signRawTransaction(hex, next);
       },
       function(signed, next) {
         if (signed.complete) {
-          log.info('Sending raw transaction', signed.hex);
+          //log.info('Sending raw transaction', signed.hex);
+          log.info('Sending raw transaction');
           dogecoin.sendRawTransaction(signed.hex, next);
         } else {
-          next(new Error('incomplete raw transaction ' + JSON.stringify(signed)));
+          next(new Error('incomplete raw transaction'));
         }
       },
       function(txid, next) {
@@ -82,15 +84,29 @@ var Model = function(client, dogecoin) {
     });
   };
 
-  this.getTransactions = function(txids, callback) {
-    if (txids.length == 0)
+  this.getNewTransactions = function(unspent, callback) {
+    if (unspent.length == 0)
       return callback(null, []);
 
-    var args = _.map(_.range(1, txids.length+1), function(i) {
-      return '$' + i;
+    log.debug('getNewTransactions', 'Building args.');
+
+    /* This is vulnerable to sql injection! We assume trust in
+     * dogecoind. I believe it is impossible for somebody to craft
+     * either a dogecoin public address or transaction id to do
+     * an injection attack! Once the number of unspent transactions
+     * grows large enough node.js escaping slows to a crawl, we have
+     * no other choice :( */
+    var args = _.map(unspent, function(tx) {
+      return "('" + tx.public_address + "', '" + tx.txid + "', " + tx.vout + ")";
     }).join(', ');
 
-    client.query('SELECT public_address, txid, vout, confirmations, amount, state FROM transaction WHERE txid IN (' + args + ');', txids, function(err, data) {
+    log.debug('getNewTransactions', 'Building query string.');
+    var query = "SELECT unspent.public_address, unspent.txid, unspent.vout FROM " +
+                "( VALUES " + args + ") AS unspent(public_address, txid, vout) " +
+                "EXCEPT (SELECT transaction.public_address, transaction.txid, transaction.vout FROM transaction WHERE transaction.state != 'spent');";
+
+    log.debug('getNewTransactions', 'Dispatching query.');
+    client.query(query, [], function(err, data) {
       if (err) {
         log.error('getTransactions', err.message);
         callback(err);
