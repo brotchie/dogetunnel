@@ -43,31 +43,49 @@ var Processor = function(model) {
     async.waterfall([
       /* Fetch all the unspent transactions from dogecoind. */
       function(next) {
+        log.debug('processUnspent', 'Fetching unspent transactions.');
         model.getUnspentChainTransactions(next);
       },
       /* Fetch all these transactions from the database. */
       function(unspent, next) {
         log.debug('processUnspent', 'Processing', unspent.length, 'unspent transactions');
-        var txids = _.unique(_.pluck(unspent, 'txid'));
-        model.getTransactions(txids, function(err, txs) {
+
+        var transactions = _.map(unspent, function(tx) {
+          return {
+            public_address: tx.scriptPubKey.addresses[0],
+            txid: tx.txid,
+            vout: tx.vout
+          };
+        });
+
+        log.debug('processUnspent', 'Getting new transactions.');
+        model.getNewTransactions(transactions, function(err, newtxs) {
           if (err) {
             log.error('processUnspent', 'getTransactions failed', err.message);
             next(err);
           } else {
-            next(null, unspent, txs);
+            next(null, unspent, newtxs);
           }
         });
       },
-      function(unspent, txs, next) {
-        var seen_map = build_txid_vout_map(txs);
+      function(unspent, newtxs, next) {
+        log.info('processUnspent', 'Adding', newtxs.length, 'new transactions.');
 
-        async.eachSeries(unspent, function(tx, next_each) {
-          var txid = tx.txid
-            , vout = tx.vout;
-          if (!seen_map[txid] || !seen_map[txid][vout]) {
-            var public_address = tx.scriptPubKey.addresses[0];
-            model.addTransaction(public_address, txid, vout, tx.confirmations, tx.amount, next_each);
+        var txlookup = _.chain(unspent)
+              .map(function(tx) {
+                return [tx.scriptPubKey.addresses[0] + '_' + tx.txid + '_' + tx.vout, tx];
+              })
+              .object()
+              .value();
+
+        async.eachSeries(newtxs, function(tx, next_each) {
+          var key = tx.public_address + '_' + tx.txid + '_' + tx.vout
+            , unspent_tx = txlookup[key];
+          if (unspent_tx) {
+            log.info('processUnspent', 'Adding transaction', unspent_tx);
+            model.addTransaction(tx.public_address, tx.txid, tx.vout, unspent_tx.confirmations, unspent_tx.amount, next_each);
           } else {
+            log.error('processUnspent', 'Transaction not found', tx);
             next_each();
           }
         }, function(err) {

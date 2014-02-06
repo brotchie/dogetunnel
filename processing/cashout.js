@@ -7,8 +7,6 @@ var pg = require('pg')
   , read = require('read')
   , _ = require('lodash');
 
-var RPC_WALLET_ALREADY_UNLOCKED = -17;
-
 var optimist = require('optimist')
     .usage('$0 target_address')
     .options('h', {
@@ -49,37 +47,43 @@ log.info('Starting cash out process to address', targetAddress);
 
 var client = new pg.Client(argv.dbstring);
 
-async.waterfall([
-  function promptForWalletPassphrase(next) {
-    if (argv.pasphrase) {
-      next(null, argv.passphrase);
-    } else {
-      read({
-        prompt: 'dogecoind wallet passphrase: ',
-        silent: true,
-        replace: '*'
-      }, next);
-    }
-  },
-  /* Try unlocking the wallet */
-  function attemptWalletUnlock(passphrase, isDefault, next) {
-    var dogecoin = require('node-dogecoin')({
-      user: argv.dogeuser,
-      pass: argv.dogepass,
-      port: argv.dogeport
-      /*headers: {
-        'Content-Type': 'application/json'
-      }*/
-    });
-
-    dogecoin.walletPassphrase(passphrase, 30, function(err) {
-      if (!err || err.code == RPC_WALLET_ALREADY_UNLOCKED) {
-        next(null, passphrase, dogecoin);
-      } else {
+function promptForWalletPassphrase(next) {
+  if (argv.pasphrase) {
+    next(null, argv.passphrase);
+  } else {
+    read({
+      prompt: 'dogecoind wallet passphrase: ',
+      silent: true,
+      replace: '*'
+    }, function(err, passphrase) {
+      if (err) {
         next(err);
+      } else {
+        next(null, passphrase);
       }
-    });
-  }], function(err, passphrase, dogecoin) {
+    })
+  }
+}
+
+function initDogecoinRPC(passphrase, next) {
+  var dogecoin = require('node-dogecoin')({
+    user: argv.dogeuser,
+    pass: argv.dogepass,
+    port: argv.dogeport,
+    passphrasecallback: function(command, args, callback) {
+      callback(null, passphrase, 300);
+    }
+  });
+
+  next(null, dogecoin);
+}
+
+var confirm = true;
+
+async.waterfall([
+    promptForWalletPassphrase,
+    initDogecoinRPC
+  ], function(err, dogecoin) {
 
     if (err) {
       log.fatal(err.message);
@@ -97,52 +101,72 @@ async.waterfall([
 
       var TXFEE = argv.txfee;
 
+      function confirmWithUser(inputs, outputs, total, next) {
+        log.info('inputs', inputs);
+        log.info('outputs', outputs);
+        log.info('total', total, 'fee', TXFEE, 'net', total - TXFEE);
+        log.info('send to', targetAddress);
+        read({
+          prompt: 'Is this ok? [all/yes/no]',
+          default: 'yes'
+        }, function(err, response) {
+          if (response === 'yes' || response === 'all') {
+            confirm = response !== 'all';
+            next(null, inputs, outputs);
+          } else {
+            next(new Error('aborted'));
+          }
+        });
+      }
+
+      function spendTransactions(txs, callback) {
+        var total = _.reduce(txs, function(sum, tx) {
+          return sum + Number(tx.amount);
+        }, 0);
+
+        var inputs = _.map(txs, function(tx) {
+          return {
+            txid: tx.txid,
+            vout: Number(tx.vout),
+            public_address: tx.public_address
+          };
+        });
+
+        var outputs = {};
+        outputs[targetAddress] = total - TXFEE;
+
+        async.waterfall([
+          function(next) {
+            if (confirm) {
+              confirmWithUser(inputs, outputs, total, next);
+            } else {
+              next(null, inputs, outputs);
+            }
+          },
+          function(inputs, outputs, next) {
+            model.sendRawTransaction(inputs, outputs, next);
+          },
+          function(sent_txid, inputs, outputs, next) {
+            log.info('Sent txid', sent_txid);
+            async.eachSeries(inputs, function(tx, next_each) {
+              log.info('Updating', tx, 'to spent.');
+              model.spendTransaction(tx.public_address, tx.txid, tx.vout, sent_txid, next_each);
+            }, next);
+          }
+        ], callback);
+      }
+
       async.waterfall([
-        function fetchCreditedTransactions(next) {
+        function(next) {
           model.getTransactionsInState(model.CREDITED, next);
         },
-        function constructRawTransaction(credited, next) {
-          var total = _.reduce(credited, function(sum, tx) {
-            return sum + Number(tx.amount);
-          }, 0);
-
-          var inputs = _.map(credited, function(tx) {
-            return {
-              txid: tx.txid,
-              vout: Number(tx.vout),
-              public_address: tx.public_address
-            };
-          });
-
-          var outputs = {};
-          outputs[targetAddress] = total - TXFEE;
-
-          next(null, inputs, outputs, total);
-        },
-        function confirmWithUser(inputs, outputs, total, next) {
-          log.info('inputs', inputs);
-          log.info('outputs', outputs);
-          log.info('total', total, 'fee', TXFEE, 'net', total - TXFEE);
-          log.info('send to', targetAddress);
-          read({
-            prompt: 'Is this ok? [no]'
-          }, function(err, response) {
-            if (response === 'yes') {
-              next(null, inputs, outputs);
-            } else {
-              next(new Error('aborted'));
-            }
-          });
-        },
-        function signAndSendTransaction(inputs, outputs, next) {
-          model.sendRawTransaction(inputs, outputs, next);
-        },
-        function updateDatabase(sent_txid, inputs, outputs, next) {
-          log.info('Sent txid', sent_txid);
-          async.eachSeries(inputs, function(tx, next_each) {
-            log.info('Updating', tx, 'to spent.');
-            model.spendTransaction(tx.public_address, tx.txid, tx.vout, sent_txid, next_each);
-          }, next);
+        function(credited, next) {
+          async.whilst(
+            function() { return credited.length > 0; },
+            function(next_whilst) {
+              var txs = credited.splice(0, 64);
+              spendTransactions(txs, next_whilst);
+            }, next);
         }
       ], function(err) {
         if (err) {
