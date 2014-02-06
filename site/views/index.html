@@ -1,0 +1,58 @@
+{% include "templates/header.html" %}
+
+           <div id="wizard">
+            <h3>wow</h3>
+            <section>
+
+              <div class="jumbotron">
+                <h1>Doge Powered VPN</h1>
+                <p class="lead">You set a password and we give you a dogecoin deposit address. Currently 1GB of transfer costs 5000 DOGE, but you can pay for as much or as little as you like!</p>
+              </div>
+            </section>
+
+            <h3>secret</h3>
+            <section id="password">
+            <div class="jumbotron">
+                <h1>Secret</h1>
+                <p class="lead">Enter your secret password, and don't forget it!</br>
+                <form id="form1" action="#">
+                    <input id="password" name="password" type="password" class="required" placeholder="password">
+                    <input id="confirm" name="confirm" type="password" class="required" placeholder="confirm password">
+                </form>
+                </p>
+                <p class="lead">By entering a password, and moving onto the next page, you are agreeing to and accepting the <a href="#">DogeTunnel Terms and Conditions</a>.</p>
+            </div>
+            </section>
+
+            <h3>top-up</h3>
+            <section>
+            <div class="jumbotron">
+                <h1>Top-up</h1>
+                <p class="lead">Here is your deposit address and username, send dogecoin to it for network access:
+                </p>
+                <span id="public_key" class="label label-success">DTnt7VZqR5ofHhAxZuDy4m3PhSjKFXpw3e</span>
+
+                <p class="lead">Note: Unless you provide an email address, this is the last time you will see your deposit address.</p>
+                <form id="form2" action="#">
+                    <input id="email" name="email" type="text" class="email" placeholder="optional email">
+                </form>
+
+            </div>
+            </section>
+
+            <h3>such private</h3>
+            <section>
+            <div class="jumbotron">
+                <h1>Such Private</h1>
+                <p class="lead">That's it! All done.</p>
+
+                <p class="lead">Using a VPN client of your choosing you can now log onto the DogeTunnel VPN with your password and deposit address as your username. Check the <a> server list </a> regularly for new and updated VPN servers.</p>
+
+                <p class="lead">Need some help? Check out our <a>detailed instructions</a>.
+            </div> 
+            
+            </section>
+        </div>
+
+{% include "templates/footer.html" %}
+

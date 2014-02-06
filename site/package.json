@@ -1,0 +1,14 @@
+{
+  "name": "dogetunnel-website",
+  "version": "0.0.1",
+  "description": "Website for Dogetunnel",
+  "main": "render.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "BSD-2-Clause",
+  "dependencies": {
+    "nunjucks": "~1.0.1"
+  }
+}

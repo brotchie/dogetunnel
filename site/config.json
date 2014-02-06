@@ -1,0 +1,11 @@
+{
+  "title": "DogeTunnel",
+  "logo": "DogeTunnel",
+  "description": "Doge Powered VPN",
+  "url": "http://dogetunnel.com",
+  "copyright": "&copy; DogeTunnel 2014",
+
+  "views_directory": "./views/",
+  "public_directory": "./static/"
+}
+
